@@ -251,6 +251,21 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     return int(msg.wParam);
 }  // WinMain
 
+POINT GetBitmapCursorPos(HWND hWnd)
+{
+    POINT cursorPt;
+    GetCursorPos(&cursorPt);
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    ScreenToClient(hWnd, &cursorPt);
+
+    // High dpi
+    cursorPt.x >>= 2;
+    cursorPt.y >>= 1;
+
+    return cursorPt;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     WPARAM wParam, LPARAM lParam)
 {
@@ -261,7 +276,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     {
     case WM_LBUTTONDOWN:
     {
-        AddRLE(LOWORD(lParam), HIWORD(lParam));
+        auto pt = GetBitmapCursorPos(hWnd);
+        AddRLE(pt.x, pt.y);
     }
     break;
     case WM_CHAR:
@@ -280,11 +296,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
         }
         else if (wParam == 's')
         {
-            POINT pt;
-            GetCursorPos(&pt);
-            RECT rc;
-            GetClientRect(hWnd, &rc);
-            ScreenToClient(hWnd, &pt);
+            auto pt = GetBitmapCursorPos(hWnd);
             AddRLE(pt.x, pt.y);
         }
     }
@@ -410,9 +422,7 @@ void AddRLE(int locationX, int locationY)
             start = str.find_first_not_of(delim, end);
         }
     };
-    
 
-    _CrtCheckMemory();
     auto RemoveLine = [](std::string& source, const std::string& to_remove)
     {
         size_t m = source.find(to_remove);
