@@ -1,0 +1,76 @@
+#N Gosper glider gun_synth
+#C Glider synthesis of Gosper glider gun.
+#C www.conwaylife.com/wiki/index.php?title=Gosper_glider_gun
+#x = 47, y = 14, rule = b3/s23
+#16bo30b$16bobo16bo11b$16b2o17bobo9b$obo10bo21b2o10b$b2o11b2o31b$bo11b
+#2o32b3$10b2o20b2o13b$11b2o19bobo9b3o$10bo21bo11bo2b$27bo17bob$27b2o18b
+#$26bobo!
+
+#N 70-2o5.rle
+#O Mark D. Niemiec's life synthesis database, Thu Feb 19 02:05:30 2015
+#x = 18, y = 16, rule = B3/S23
+#bbx12bx$bxbx10bxbx$xxbxx8bxxbxx$xx14bxx$bbx12bx$bb4x6b4x$bbxbbxx4bxxbb
+#x$3bxxbbxbbxbbxx$4bxxb4xbxx$5bxbxbbxbx$6bx4bx$$5bx6bx$3bxxbxxbbxxbxx$
+#4bx8bx$4bxx6bxx!
+
+#N 117p9.rle
+#O Mark D. Niemiec's life synthesis database, Thu Feb 19 02:05:30 2015
+#x = 17, y = 29, rule = B3/S23
+#8bx$7bxbx$6bx3bx$7b3x$$5bxx3bxx$bbxx3bxbx3bxx$bbxx3bxbx3bxx$xx5bxbx5b
+#xx$4bxxbxbxbxx$x6bxbx6bx$3bxxbbxbxbbxx$bxbbxbx3bxbxbbx$bxx11bxx$bxx11b
+#xx$4bx7bx$4b3x3b3x$6bx3bx$3bxxbx3bxbxx$5bxx3bxx$5bxbxbxbx$$5bxbbxbbx$
+#6bxxbxx$5bxx3bxx$$4bxbb3xbbx$3b11x$3bxxbx3bxbxx!
+
+#N p48clsl.rle
+#O Mark D. Niemiec's life synthesis database, Thu Feb 19 02:05:35 2015
+#x = 105, y = 85, rule = B3/S23
+#61bo15bo$59bobo15bobo$60boo4bo10boo$67boo$66boo$75bobo$75boo$76bo$5bo$
+#3bobo29bxx28boo$4boo29bxx28boo4bobo$boo68boo$obo69bo$bbo3$57boo21boo
+#14bx5bx$58boo19boo14b3x3b3x$57bo23bo12bxxbx3bxbxx$72bo21b3x5b3x$71boo
+#22bxx5bxx$71bobo$99bx$98b3x$$98bxbx$99bx4$96b3xb3x$98bxbx3$98b3x24$56b
+#obo$57boo$57bo3$19bo32bo$19bobo17bxx12boo4boo$15b3oboo17bxbbx10boo4bo
+#bbo$17bo20bxbx17bobo5bo5bo16b3x4bx5bx$16bo22bx19bo5b3o3b3o15bxbbxbb3x
+#3b3x$64boobo3boboo14bx4bxxbx3bxbxx$64b3o5b3o14bx3b4x5b3x$65boo5boo15bx
+#5bxx5bxx$53boo34bxbbx$54boo13bo20bxx7bx$53bo14b3o19bx7b3x$91bx$68bobo
+##20bx6bxbx$69bo29bx$$94bxx$93b3xbx$66b3ob3o20bx3bxxb3x$68bobo23b3xbxbx$
+#97bx$$68b3o27b3x!
+
+#N Lightweight spaceship_synth
+#O Mark D. Niemiec
+#C Glider synthesis of lightweight spaceships.
+#C http://home.interserv.com/~mniemiec/3gliders.htm#
+#x = 149, y = 103, rule = 23/3
+#87bobo59b$83bo3b2o30bo29b$48b2o34bo3bo31b2o27b$7b2o39bobo31b3o34b2o28b
+#$7bobo29bo8bo38b3o59b$obo4bo32b2o45bo61b$b2o22b3o11b2o3bo20b3o20bo16b
+#3o41b$bo3bo19bo2bo15b2o19bo2bo36bo2bo40b$5b2o18bo17bobo19bo39bo43b$4bo
+#bo18bo39bo39bo43b$26bobo37bobo37bobo40b12$131bo17b$126bo3bo18b$127bo2b
+#3o16b$125b3o21b6$83bobo63b$84b2o63b$84bo64b$4bobo37bobo102b$5b2o38b2o
+#102b$5bo19b3o17bo19b3o37b3o37b3ob$25bo2bo36bo2bo16b3o17bo2bo36bo2bo$5b
+#2o18bo19b2o18bo39bo39bo3b$5b2o18bo19b2o18bo39bo39bo3b$b3o22bobo13b2o
+#22bobo14b3o20bobo37bobo$3bo37bobo41bo63b$2bo40bo40bo64b16$2bobo144b$3b
+#2o144b$3bo145b$43bobo37bobo63b$44b2o38b2o63b$44bo39bo64b$5b2o72bobo67b
+#$4bobo73b2o67b$5bo19b3o17b2o18b3o12bo4b2o18b3o41b$25bo2bo15bobo18bo2bo
+#17bo18bo2bo40b$25bo18b2o19bo17b3o19bo43b$5b2o18bo39bo17bo21bo43b$4bobo
+#19bobo37bobo37bobo40b$6bo34b3o105b$43bo105b$42bo106b18$3bobo37bobo103b
+#$4b2o38b2o103b$4bo31bobo5bo104b$37b2o110b$37bo111b$5b2o18b3o17b2o18b3o
+#81b$6bo18bo2bo17bo18bo2bo80b$5bo19bo14bobo2bo19bo83b$5b2o18bo15b2o2b2o
+#18bo83b$b2o23bobo12bo24bobo80b$obo146b$2bo!
+
+#N Lightweight spaceship
+#O John Conway
+#C A very well-known period 4 c/2 orthogonal spaceship.
+#C www.conwaylife.com/wiki/index.php?title=Lightweight_spaceship
+#x = 5, y = 4, rule = B3/S23
+#bo2bo$o4b$o3bo$4o!
+
+#N LWSS tagalong
+#O David Bell
+#C A tagalong for two lightweight, middleweight, or heavyweight spaces
+#C hips.
+#C www.conwaylife.com/wiki/index.php?title=Lightweight_spaceship
+x = 25, y = 19, rule = b3/s23
+21bo3b$18b4o3b$13bo2bob2o5b$13bo11b$4o8bo3bob2o5b$o3bo5b2ob2obobob5o$o
+9b2obobobo2b5o$bo2bo2b2o2bo3b3o2bob2ob$6bo2bob2o12b$6bo4b2o12b$6bo2bob
+2o12b$bo2bo2b2o2bo3b3o2bob2ob$o9b2obobobo2b5o$o3bo5b2ob2obobob5o$4o8bo
+3bob2o5b$13bo11b$13bo2bob2o5b$18b4o3b$21bo!
+
