@@ -1,11 +1,6 @@
 #include "rleparse.h"
-#include <windows.h>
-
 #include <filesystem>
 #include <Shlwapi.h>
-#include <fstream>
-#include <string>
-#include <sstream>
 #include <functional> 
 
 extern "C"
@@ -66,7 +61,6 @@ std::vector<RLE> GatherPatterns()
     mpc_parser_t* rle = mpc_new("rle");
     mpc_parser_t* rleSymbol = mpc_new("rlesymbol");
     mpc_parser_t* rleNumber = mpc_new("rlenumber");
-    mpc_parser_t* character = mpc_new("character");
     mpc_parser_t* fullParse = mpc_new("parser");
 
     // Here's an example file that this parser reads:
@@ -84,7 +78,6 @@ std::vector<RLE> GatherPatterns()
         ident       : /[a-zA-Z_][a-zA-Z0-9_]*/ ;               
         rule        : /[a-zA-Z]*[0-9]+\/[a-zA-Z]*[0-9]+/ ;      
         number      : /[0-9]+/ ;                               
-        character   : /./ ;                                   
         comment     : /#[^\n]*\n/ ;                            
         assignment  : <ident> '=' (<rule> | <number>) /,*/ ;
         rlesymbol   : /[a-zA-Z]|\$/ ;
@@ -92,7 +85,7 @@ std::vector<RLE> GatherPatterns()
         rle         : (<rlenumber> <rlesymbol>) | <rlesymbol> ;
         parser      : /^/ <comment>* <assignment>* <rle>* /!/ /$/ ; 
         )tag",
-        ident, comment, rule, number, assignment, rle, rleSymbol, rleNumber, character, fullParse, NULL);
+        ident, comment, rule, number, assignment, rle, rleSymbol, rleNumber, fullParse, NULL);
 
     // Bug in the grammar
     if (err != NULL)
@@ -126,56 +119,55 @@ std::vector<RLE> GatherPatterns()
             std::vector<AliveDead> lineRun;
             std::function<void(mpc_ast_t*)> readAST;
 
-            readAST = [&](mpc_ast_t* ast)
+            // Traverse the tree in 'pre' order. 
+            mpc_ast_trav_t* traverse = mpc_ast_traverse_start(ast, mpc_ast_trav_order_t::mpc_ast_trav_order_pre);
+            auto ast_current = mpc_ast_traverse_next(&traverse);
+            while (ast_current)
             {
-                for (int i = 0; i < ast->children_num; i++)
+                std::string tag(ast_current->tag);
+                if (tag == "rlenumber|regex")
                 {
-                    auto pChild = ast->children[i];
-
-                    std::string tag(pChild->tag);
-                    if (tag == "rlenumber|regex")
-                    {
-                        cells.count = std::stoi(pChild->contents);
-                    }
-                    else if (tag == "rlesymbol|regex" ||
-                        tag == "rle|rlesymbol|regex")
-                    {
-                        if (pChild->contents[0] == 'o' ||
-                            pChild->contents[0] == 'x')
-                        {
-                            cells.alive = 1;
-                            lineRun.push_back(cells);
-                            cells.count = 1;
-                        }
-                        else if (pChild->contents[0] == '$')
-                        {
-                            currentPattern.runs.push_back(lineRun);
-                            lineRun.clear();
-                            cells.count--;
-                            while (cells.count > 0)
-                            {
-                                currentPattern.runs.push_back(std::vector<AliveDead>());
-                                cells.count--;
-                            }
-                            cells.count = 1;
-                        }
-                        else
-                        {
-                            cells.alive = 0;
-                            lineRun.push_back(cells);
-                            cells.count = 1;
-                        }
-                    }
-                    readAST(pChild);
+                    cells.count = std::stoi(ast_current->contents);
                 }
-            };
-            readAST(ast);
+                else if (tag == "rlesymbol|regex" ||
+                    tag == "rle|rlesymbol|regex")
+                {
+                    if (ast_current->contents[0] == 'o' ||
+                        ast_current->contents[0] == 'x')
+                    {
+                        cells.alive = 1;
+                        lineRun.push_back(cells);
+                        cells.count = 1;
+                    }
+                    else if (ast_current->contents[0] == '$')
+                    {
+                        currentPattern.runs.push_back(lineRun);
+                        lineRun.clear();
+                        cells.count--;
+                        while (cells.count > 0)
+                        {
+                            currentPattern.runs.push_back(std::vector<AliveDead>());
+                            cells.count--;
+                        }
+                        cells.count = 1;
+                    }
+                    else
+                    {
+                        cells.alive = 0;
+                        lineRun.push_back(cells);
+                        cells.count = 1;
+                    }
+                }
+                ast_current = mpc_ast_traverse_next(&traverse);
+            }
+            mpc_ast_traverse_free(&traverse);
 
             if (!lineRun.empty())
             {
                 currentPattern.runs.push_back(lineRun);
             }
 
+            // Delete AST
             mpc_ast_delete(ast);
         }
         else
@@ -184,11 +176,12 @@ std::vector<RLE> GatherPatterns()
             mpc_err_delete(r.error);
         }
 
+        // Remember the pattern
         patterns.push_back(currentPattern);
     }
 
     // Cleanup the parser
-    mpc_cleanup(10, ident, comment, rule, number, assignment, rle, rleSymbol, rleNumber, character, fullParse);
+    mpc_cleanup(9, ident, comment, rule, number, assignment, rle, rleSymbol, rleNumber, fullParse);
 
     return patterns;
 }

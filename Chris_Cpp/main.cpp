@@ -26,7 +26,7 @@ struct Cell
 std::shared_ptr<Bitmap> spBitmap;
 std::vector<Cell> buffers[2];
 uint32_t currentBuffer = 0;
-int currentScale = 1;
+int currentScale = 0;
 
 int mapWidth = 0;
 int mapHeight = 0;
