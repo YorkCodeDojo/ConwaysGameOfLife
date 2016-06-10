@@ -1,26 +1,19 @@
 #define _CRTDBG_MAP_ALLOC
+#define NOMINMAX
+
 #include <windows.h>
-#include <objidl.h>
+#include <algorithm>
+
+using namespace std;
 #include <gdiplus.h>
+
 #include <memory>
-#include <vector>
 #include "simplexnoise.h"
-#include <filesystem>
-#include <Shlwapi.h>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <algorithm> 
-#include <functional> 
-#include <cctype>
-#include <locale>
 #include <cassert>
-#pragma comment(lib, "shlwapi.lib")
+#include "rleparse.h"
 
-using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
-
-namespace fs = std::tr2::sys;
+using namespace Gdiplus;
 
 bool clear = false;
 
@@ -33,33 +26,28 @@ struct Cell
 std::shared_ptr<Bitmap> spBitmap;
 std::vector<Cell> buffers[2];
 uint32_t currentBuffer = 0;
+int currentScale = 1;
 
-int mapWidth = 100;
-int mapHeight = 100;
-
+int mapWidth = 0;
+int mapHeight = 0;
 int windowWidth = 0;
 int windowHeight = 0;
 
-int currentRLE = 0;
-std::vector<fs::path> rleFiles;
-
-void AddRLE(int locationX, int locationY);
+std::vector<RLE> patterns;
+int currentPattern = 0;
 
 bool init = true;
-VOID OnPaint(HDC hdc)
+bool pause = false;
+bool step = false;
+
+int StepSimulation()
 {
-    Graphics graphics(hdc);
-    
-    graphics.SetSmoothingMode(SmoothingMode::SmoothingModeDefault);
-    graphics.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
-    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
- 
     // Lock the bitmap with the same format, to avoid translation, draw a green line on it, and copy it to the screen.
     if (spBitmap && !buffers[0].empty())
     {
         Cell* pSourceBuffer = &buffers[currentBuffer][0];
         Cell* pDestBuffer = &buffers[!currentBuffer][0];
-        
+
         for (int y = 0; y < (int)mapHeight; y++)
         {
             for (int x = 0; x < (int)mapWidth; x++)
@@ -90,14 +78,14 @@ VOID OnPaint(HDC hdc)
                             if (newY < 0) newY = mapHeight + newY;
                             if (newX >= mapWidth) newX = newX - mapWidth;
                             if (newY >= mapHeight) newY = newY - mapHeight;
-                            
+
                             Cell* pSourceData = (pSourceBuffer + (newY * mapWidth) + (newX));
 
                             surroundCount += pSourceData->alive;
                         }
                     }
                 }
-             
+
                 // Pixel Maths.... step down by the x stride to the row, then across to the pixel
                 // We work in 4 byte pieces, because each pixel is ARGB 
                 Cell* pTarget = (pDestBuffer + (y * mapWidth) + (x));
@@ -105,7 +93,7 @@ VOID OnPaint(HDC hdc)
                 bool live = (pSource->alive);
                 if (live)
                 {
-                    if (surroundCount == 2 || 
+                    if (surroundCount == 2 ||
                         surroundCount == 3)
                     {
                         // Under population death
@@ -121,7 +109,7 @@ VOID OnPaint(HDC hdc)
                 else
                 {
                     if (surroundCount == 3 /*||
-                        surroundCount == 6*/)
+                                           surroundCount == 6*/)
                     {
                         // New life from death
                         pTarget->alive = 1;
@@ -146,6 +134,17 @@ VOID OnPaint(HDC hdc)
         }
 
         clear = false;
+        currentBuffer = !currentBuffer;
+        init = false;
+    }
+    return !currentBuffer;
+}
+
+void CopyTargetToBitmap(int targetBuffer)
+{
+    if (spBitmap)
+    {
+        Cell* pDestBuffer = &buffers[targetBuffer][0];
 
         BitmapData writeData;
         Rect lockRect(0, 0, mapWidth, mapHeight);
@@ -179,19 +178,79 @@ VOID OnPaint(HDC hdc)
         }
 
         spBitmap->UnlockBits(&writeData);
-        
-        RectF dest;
-        dest.X = 0;
-        dest.Y = 0;
-        dest.Width = float(windowWidth);
-        dest.Height = float(windowHeight);
-        graphics.DrawImage(spBitmap.get(), dest, 0.0f, 0.0f, float(mapWidth), float(mapHeight), Unit(UnitPixel) );
-        currentBuffer = !currentBuffer;
-        init = false;
+    }
+}
+
+VOID OnPaint(HDC hdc)
+{
+    Graphics graphics(hdc);
+
+    graphics.SetSmoothingMode(SmoothingMode::SmoothingModeDefault);
+    graphics.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+
+    if (!pause || step)
+    {
+        int targetBuffer = StepSimulation();
+        CopyTargetToBitmap(targetBuffer);
+        step = false;
+    }
+
+    RectF dest;
+    dest.X = 0;
+    dest.Y = 0;
+    dest.Width = float(windowWidth);
+    dest.Height = float(windowHeight);
+    graphics.DrawImage(spBitmap.get(), dest, 0.0f, 0.0f, float(mapWidth), float(mapHeight), Unit(UnitPixel));
+}
+
+void StampCurrentPattern(int locationX, int locationY)
+{
+    if (patterns.empty())
+    {
+        return;
+    }
+
+    if (currentPattern >= patterns.size())
+    {
+        currentPattern = 0;
+    }
+
+    Cell* pDestBuffer = &buffers[currentBuffer][0];
+
+    int x = locationX;
+    int y = locationY;
+    for (auto& run : patterns[currentPattern].runs)
+    {
+        if (y >= mapHeight) { y = y - mapHeight; }
+        if (x >= mapWidth) { x = x - mapWidth; }
+
+        Cell* pTarget = (Cell*)((Cell*)pDestBuffer + (y * mapWidth) + (x));
+
+        for (auto& row : run)
+        {
+            for (auto count = 0; count < row.count; count++)
+            {
+                if ((locationX + x) >= mapWidth) x = x - mapWidth;
+
+                pTarget[x].alive = row.alive ? 1 : 0;
+                pTarget[x++].age = 0;
+
+                assert((pTarget + x) <= (pDestBuffer + (mapWidth * mapHeight)));
+            }
+        }
+
+        y++;
+        x = locationX;
     }
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+void ShowConsole()
+{
+    AllocConsole();
+    freopen("CONOUT$", "w", stdout);
+}
 
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
 {
@@ -203,6 +262,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
 
     // Initialize GDI+.
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    patterns = GatherPatterns();
 
     wndClass.style = CS_HREDRAW | CS_VREDRAW;
     wndClass.lpfnWndProc = WndProc;
@@ -233,7 +294,6 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     ShowWindow(hWnd, iCmdShow);
     UpdateWindow(hWnd);
 
-
     HDC dc = GetDC(hWnd);
     do
     {
@@ -243,13 +303,12 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
             DispatchMessage(&msg);
         }
         OnPaint(dc);
-        //EndPaint(hWnd, &ps);
 
     } while (msg.message != WM_QUIT);
 
     GdiplusShutdown(gdiplusToken);
     return int(msg.wParam);
-}  // WinMain
+}
 
 POINT GetBitmapCursorPos(HWND hWnd)
 {
@@ -260,10 +319,22 @@ POINT GetBitmapCursorPos(HWND hWnd)
     ScreenToClient(hWnd, &cursorPt);
 
     // High dpi
-    cursorPt.x >>= 2;
-    cursorPt.y >>= 1;
+    cursorPt.x >>= 1;
+
+    cursorPt.x >>= currentScale;
+    cursorPt.y >>= currentScale;
 
     return cursorPt;
+}
+
+void InitMaps()
+{
+    mapWidth = windowWidth >> currentScale;
+    mapHeight = windowHeight >> currentScale;
+    spBitmap = std::make_shared<Bitmap>(mapWidth, mapHeight, PixelFormat32bppPARGB);
+    buffers[0].resize(mapWidth * mapHeight);
+    buffers[1].resize(mapWidth * mapHeight);
+    init = true;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
@@ -277,7 +348,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     case WM_LBUTTONDOWN:
     {
         auto pt = GetBitmapCursorPos(hWnd);
-        AddRLE(pt.x, pt.y);
+        StampCurrentPattern(pt.x, pt.y);
+        step = true;
     }
     break;
     case WM_CHAR:
@@ -285,19 +357,44 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
         if (wParam == 'c')
         {
             clear = true;
+            step = true;
         }
         else if (wParam == 'i')
         {
             init = true;
+            step = true;
         }
         else if (wParam == 'n')
         {
-            currentRLE++;
+            currentPattern++;
         }
         else if (wParam == 's')
         {
             auto pt = GetBitmapCursorPos(hWnd);
-            AddRLE(pt.x, pt.y);
+            StampCurrentPattern(pt.x, pt.y);
+            step = true;
+        }
+        else if (wParam == 'p')
+        {
+            pause = !pause;
+        }
+        else if (wParam == ' ')
+        {
+            step = true;
+        }
+        else if (wParam == 'z')
+        {
+            currentScale--;
+            currentScale = std::max(0, currentScale);
+            InitMaps();
+            step = true;
+        }
+        else if (wParam == 'x')
+        {
+            currentScale++;
+            currentScale = std::min(6, currentScale);
+            InitMaps();
+            step = true;
         }
     }
     break;
@@ -305,15 +402,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     {
         windowWidth = LOWORD(lParam);
         windowHeight = HIWORD(lParam);
-        mapWidth = windowWidth >> 1;
-        mapHeight = windowHeight >> 1;
-        spBitmap = std::make_shared<Bitmap>(mapWidth, mapHeight, PixelFormat32bppPARGB);
-        buffers[0].resize(mapWidth * mapHeight);
-        buffers[1].resize(mapWidth * mapHeight);
-
-        init = true;
+        InitMaps();
     }
-        return 0;
+    return 0;
     case WM_ERASEBKGND:
         return TRUE;
 
@@ -325,273 +416,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     case WM_DESTROY:
         spBitmap.reset();
         PostQuitMessage(0);
-        return 0; 
+        return 0;
     default:
-        break;  
+        break;
     }
     return DefWindowProc(hWnd, message, wParam, lParam);
 } // WndProc
-
-TCHAR* GetThisPath(TCHAR* dest, size_t destSize)
-{
-    if (!dest) return NULL;
-    if (MAX_PATH > destSize) return NULL;
-
-    auto length = GetModuleFileName(NULL, dest, DWORD(destSize));
-    PathRemoveFileSpec(dest);
-    return dest;
-}
- 
-std::vector<fs::path> FindRLE()
-{
-    std::vector<fs::path> files; 
-    TCHAR appPath[MAX_PATH];
-    GetThisPath(appPath, MAX_PATH);
-
-    fs::path someDir = fs::path(appPath);
-
-    fs::directory_iterator end_iter;
-    if (fs::exists(someDir) && fs::is_directory(someDir))
-    {
-        // Walk the top level directoriespdate
-        for (fs::directory_iterator dir_iter(someDir); dir_iter != end_iter; ++dir_iter)
-        {
-            if (dir_iter->path().extension().generic_string() == ".rle")
-            {
-                files.push_back(dir_iter->path());
-            }
-        }
-    }
-    return files;
-}
-
-static inline std::string &ltrim(std::string &s)
-{
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-    return s;
-}
-
-// trim from end
-static inline std::string &rtrim(std::string &s)
-{
-    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
-    return s;
-}
-
-// trim from both ends
-static inline std::string &trim(std::string &s)
-{
-    return ltrim(rtrim(s));
-}
-void AddRLE(int locationX, int locationY)
-{
-    auto found = FindRLE();
-    if (found.empty())
-    {
-        return;
-    }
-
-    if (currentRLE >= found.size())
-    {
-        currentRLE = 0;
-    }
-
-    auto readFile = [](fs::path filePath)
-    {
-        std::ifstream ifs(filePath);
-        std::ostringstream buffer;
-        buffer << ifs.rdbuf();
-        return buffer;
-    };
-
-    auto tokenize = [](std::string str, std::vector<std::string> &token_v, const char delim = ' ')
-    {
-        size_t start = str.find_first_not_of(delim), end = start;
-
-        while (start != std::string::npos)
-        {
-            // Find next occurence of delimiter
-            end = str.find(delim, start);
-            // Push back the token found into vector
-            
-            std::string tok = str.substr(start, end - start);
-            tok.erase(std::remove(tok.begin(), tok.end(), ','), tok.end());
-
-            token_v.push_back(tok);
-            // Skip all occurences of the delimiter to find new start
-            start = str.find_first_not_of(delim, end);
-        }
-    };
-
-    auto RemoveLine = [](std::string& source, const std::string& to_remove)
-    {
-        size_t m = source.find(to_remove);
-        size_t n = source.find_first_of("\n", m + to_remove.length());
-        source.erase(m, n - m + 1);
-    };
-
-    struct AliveDead
-    {
-        int count;
-        bool alive;
-    };
-    struct RLE
-    {
-        int x;
-        int y;
-        std::vector<std::vector<AliveDead>> runs;
-    };
-
-    RLE rle;
-    int currentRun = 0;
-    std::string line;
-    std::ifstream ifs(found[currentRLE]);
-
-    std::vector<AliveDead> lineRun;
-
-    while (std::getline(ifs, line))
-    {
-        std::vector<std::string> tokens;
-        tokenize(line, tokens, ' ');
-        int token = 0;
-        while(token < tokens.size())
-        {
-            if (tokens[token].empty())
-                continue;
-
-            // Ignore comment lines
-            if (tokens[token][0] == '#')
-                break;
-
-            if (tokens[token][0] == 'x' &&
-                ((tokens.size() > token + 1)) &&
-                tokens[token + 1][0] == '=')
-            {
-                rle.x = std::atoi(tokens[token + 2].c_str());
-                token += 3;
-                continue;
-            }
-            if (tokens[token][0] == 'y')
-            {
-                rle.y = std::atoi(tokens[token + 2].c_str());
-                token += 3;
-                continue;
-            }
-
-            if (tokens[token] == "rule")
-            {
-                token += 3;
-                continue;
-            }
-
-            std::size_t pos = 0;
-            while (pos < tokens[token].size())
-            {
-                while (pos < tokens[token].size() &&
-                    tokens[token][pos] != '\n' &&
-                    tokens[token][pos] != '$' &&
-                    tokens[token][pos] != '!')
-                {
-                    if (tokens[token][pos] == 'o' ||
-                        tokens[token][pos] == 'x')
-                    {
-                        lineRun.push_back(AliveDead{ 1, true });
-                        pos++;
-                    }
-                    else if (tokens[token][pos] == 'b')
-                    {
-                        lineRun.push_back(AliveDead{ 1, false });
-                        pos++;
-                    }
-                    else
-                    {
-                        auto endNum = tokens[token].find_first_not_of("0123456789", pos);
-
-                        if (endNum != pos)
-                        {
-                            AliveDead cells;
-                            std::string digit = tokens[token].substr(pos, endNum - pos);
-                            cells.count = std::stoi(digit);
-                            if (tokens[token][endNum] == 'o' ||
-                                tokens[token][endNum] == 'x')
-                            {
-                                cells.alive = true;
-                                pos = endNum + 1;
-                                lineRun.push_back(cells);
-                            }
-                            else if (tokens[token][endNum] == 'b')
-                            {
-                                cells.alive = false;
-                                pos = endNum + 1;
-                                lineRun.push_back(cells);
-                            }
-                            else if (tokens[token][endNum] == '$')
-                            {
-                                if (!lineRun.empty())
-                                {
-                                    rle.runs.push_back(lineRun);
-                                }
-                                lineRun.clear();
-                                cells.count--;
-                                if (cells.count > 0)
-                                {
-                                    for (auto i = 0; i < cells.count; i++)
-                                    {
-                                        rle.runs.push_back(lineRun);
-                                    }
-                                }
-                                pos = endNum + 1;
-                            }
-                        }
-                        else
-                        {
-                            pos++;
-                        }
-                    }
-                }
-                if ((tokens[token][pos] == '!' ||
-                    tokens[token][pos] == '$') &&
-                    !lineRun.empty())
-                {
-                    rle.runs.push_back(lineRun);
-                    lineRun.clear();
-                }
-                
-
-                pos++;
-            }
-        
-            token++;
-        }
-    }
-
-    Cell* pDestBuffer = &buffers[currentBuffer][0];
-
-    int x = locationX;
-    int y = locationY;
-    for (auto& run : rle.runs)
-    {
-        if (y >= mapHeight) { y = y - mapHeight; }
-        if (x >= mapWidth) { x = x - mapWidth; }
-
-        Cell* pTarget = (Cell*)((Cell*)pDestBuffer + (y * mapWidth) + (x));
-
-        for (auto& row : run)
-        {
-            for (auto count = 0; count < row.count; count++)
-            {
-                if ((locationX + x) >= mapWidth) x = x - mapWidth;
-
-                pTarget[x].alive = row.alive ? 1 : 0;
-                pTarget[x++].age = 0;
-
-                assert((pTarget + x) <= (pDestBuffer + (mapWidth * mapHeight)));
-            }
-        }
-
-        y++;
-        x = locationX;
-    }
-}
-
 
